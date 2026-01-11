@@ -29,9 +29,24 @@ Example format:
 
     # 4. Lazy-load LLM and generate
     llm = get_llm()
-    llm_response = llm(prompt)
+    # llm_response = llm(prompt) # bug :( todo: adjust for model Qwen2.5-7B-Instruct
+    llm_response = llm.chat_completion(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful study assistant that creates clear explanations and flashcards."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        max_tokens=600, # todo: can be in config / UI
+        temperature=0.3, # todo: can be in config / UI
+    )
 
-    raw_response = llm_response[0]["generated_text"].split("[/INST]")[-1].strip()
+    # raw_response = llm_response[0]["generated_text"].split("[/INST]")[-1].strip()
+    raw_response = llm_response.choices[0].message.content
 
     # 5. Parse JSON safely
     try:

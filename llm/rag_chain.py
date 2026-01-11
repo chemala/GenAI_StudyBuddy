@@ -11,7 +11,7 @@ def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, to
         normalize_embeddings=True
     ).astype("float32")
 
-    # Retrieve from FAISS
+    # Retrieve from FAISS - vector database
     D, I = index.search(q_emb, top_k)
     local_context = "\n".join(chunks[i] for i in I[0])
 
@@ -59,8 +59,8 @@ Question:
                 "content": prompt
             }
         ],
-        max_tokens=600,
-        temperature=0.3,
+        max_tokens=600, # todo: can be in config / UI
+        temperature=0.3, # todo: can be in config / UI
     )
 
     answer = result.choices[0].message.content
