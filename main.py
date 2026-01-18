@@ -23,6 +23,7 @@ def build(files):
 
     return f"Indexed {len(ch)} chunks."
 
+
 def format_chat_history_for_display():
     """Convert messages format to old Gradio tuple format"""
     formatted_history = []
@@ -34,9 +35,15 @@ def format_chat_history_for_display():
     return formatted_history
 
 
-def ask(q, mode, api_key):
+def ask(q, mode, api_key, inference_mode):
+    """
+    Updated ask function with inference mode parameter
+    """
     if state["index"] is None:
         return "Build the index first.", [], gr.update(value=q)
+
+    # Convert checkbox value to boolean for allow_inference parameter
+    allow_inference = (inference_mode == "Inference Mode")
 
     answer, updated_chat_history = rag_with_llm(
         q,
@@ -44,7 +51,8 @@ def ask(q, mode, api_key):
         state["index"],
         state["chunks"],
         api_key,
-        state["chat_history"]
+        state["chat_history"],
+        allow_inference=allow_inference  # Pass the inference mode
     )
 
     state["chat_history"] = updated_chat_history
@@ -69,89 +77,145 @@ def call_generate_flashcards(flashcard_topic, num_flashcards, mode, api_key):
     formatted_flashcards = [[card['question'], card['answer']] for card in flashcards_data]
     return formatted_flashcards
 
+
 def launch_ui():
-    with gr.Blocks() as demo:
-        gr.Markdown("## RAG Study Assistant")
+    with gr.Blocks(theme=gr.themes.Soft()) as demo:
+        gr.Markdown("# 📚 RAG Study Assistant")
+        gr.Markdown("Upload PDFs, build an index, and ask questions with optional web search.")
 
-        files = gr.File(
-            file_types=[".pdf"],
-            file_count="multiple",
-            label="Upload PDFs"
-        )
+        with gr.Row():
+            with gr.Column(scale=1):
+                gr.Markdown("### 📄 Document Management")
+                files = gr.File(
+                    file_types=[".pdf"],
+                    file_count="multiple",
+                    label="Upload PDFs"
+                )
 
-        api = gr.Textbox(
-            label="Tavily API Key",
-            value=TAVILY_API_KEY,
-            type="password"
-        )
+                api = gr.Textbox(
+                    label="Tavily API Key",
+                    value=TAVILY_API_KEY,
+                    type="password"
+                )
 
-        build_btn = gr.Button("Build Index")
-        status = gr.Textbox(label="Status")
+                build_btn = gr.Button("🔨 Build Index", variant="primary")
+                status = gr.Textbox(label="Status", interactive=False)
 
-        mode = gr.Radio(
-            ["local", "web", "hybrid"],
-            value="hybrid",
-            label="Search mode"
-        )
+            with gr.Column(scale=2):
+                gr.Markdown("### ⚙️ Settings")
 
-        question = gr.Textbox(label="Question", lines=2)
+                with gr.Row():
+                    mode = gr.Radio(
+                        ["local", "web", "hybrid"],
+                        value="hybrid",
+                        label="Search Mode",
+                        info="Local: PDF only | Web: Online only | Hybrid: Both sources"
+                    )
 
-        # Add Chatbot component for displaying history
+                    inference_mode = gr.Radio(
+                        ["Strict Mode", "Inference Mode"],
+                        value="Strict Mode",
+                        label="Answer Mode",
+                        info="Strict: Only explicit facts | Inference: Allows reasoning from context"
+                    )
+
+                with gr.Accordion("ℹ️ Mode Explanations", open=False):
+                    gr.Markdown("""
+                    **Search Modes:**
+                    - **Local**: Answers only from uploaded PDFs
+                    - **Web**: Searches the internet for current information
+                    - **Hybrid**: Combines PDF content with web search when needed
+
+                    **Answer Modes:**
+                    - **Strict Mode**: Only provides information explicitly stated in the documents. Best for factual verification.
+                    - **Inference Mode**: Can make reasonable conclusions based on emphasis, patterns, and context. Best for analytical questions.
+                    """)
+
+        gr.Markdown("---")
+        gr.Markdown("### 💬 Chat Interface")
+
         chatbot = gr.Chatbot(
-            label="Chat History",
-            height=300,
+            label="Conversation History",
+            height=400
         )
 
-        answer = gr.Textbox(label="Answer", lines=12)
-
-        # New components for flashcard generation
-        flashcard_topic = gr.Textbox(
-            label="Flashcard Topic",
-            placeholder="e.g., Key concepts from the document"
-        )
-        num_flashcards = gr.Number(
-            label="Number of Flashcards",
-            value=5,
-            minimum=1,
-            maximum=20,
-            step=1
+        question = gr.Textbox(
+            label="Ask a Question",
+            placeholder="e.g., What is the biggest source of bias in GenAI?",
+            lines=2
         )
 
-        # Add gr.DataFrame for displaying generated flashcards
+        with gr.Row():
+            ask_btn = gr.Button("🔍 Ask Question", variant="primary", scale=2)
+            clear_btn = gr.Button("🗑️ Clear Chat", scale=1)
+
+        answer = gr.Textbox(
+            label="Latest Answer",
+            lines=8,
+            interactive=False
+        )
+
+        gr.Markdown("---")
+        gr.Markdown("### 🃏 Flashcard Generator")
+
+        with gr.Row():
+            flashcard_topic = gr.Textbox(
+                label="Flashcard Topic",
+                placeholder="e.g., Key concepts from the document",
+                scale=2
+            )
+            num_flashcards = gr.Number(
+                label="Number of Cards",
+                value=5,
+                minimum=1,
+                maximum=20,
+                step=1,
+                scale=1
+            )
+
+        generate_flashcards_btn = gr.Button("✨ Generate Flashcards", variant="secondary")
+
         flashcard_display = gr.DataFrame(
             headers=["Question", "Answer"],
             value=[],
-            label="Generated Flashcards"
+            label="Generated Flashcards",
+            wrap=True
         )
 
-        ask_btn = gr.Button("Ask")
-        generate_flashcards_btn = gr.Button("Generate Flashcards") # New button
-
+        # Event handlers
         build_btn.click(build, inputs=files, outputs=status)
 
-        # Update ask_btn.click to return the answer, chat history, and clear the question textbox
         ask_btn.click(
             fn=ask,
-            inputs=[question, mode, api],
-            outputs=[answer, chatbot, question] # Now outputs both the answer, chat history, and the question component for clearing
+            inputs=[question, mode, api, inference_mode],  # Added inference_mode
+            outputs=[answer, chatbot, question]
         )
 
-        # Attach the call_generate_flashcards function to the new button's click event
+        # Clear chat function
+        def clear_chat():
+            state["chat_history"] = []
+            return [], "", []
+
+        clear_btn.click(
+            fn=clear_chat,
+            inputs=None,
+            outputs=[chatbot, answer, chatbot]
+        )
+
         generate_flashcards_btn.click(
             fn=call_generate_flashcards,
             inputs=[flashcard_topic, num_flashcards, mode, api],
             outputs=flashcard_display
         )
 
-        # Function to update the chatbot display from the state's chat_history
+        # Update chatbot display on load
         def update_chatbot_display():
             return format_chat_history_for_display()
 
-        # Initial load and subsequent updates for the chatbot
         demo.load(update_chatbot_display, inputs=None, outputs=chatbot)
-        # Removed the problematic line with _js
 
     demo.launch(share=True, debug=True)
+
 
 if __name__ == "__main__":
     print("Tavily key set:", bool(TAVILY_API_KEY))
