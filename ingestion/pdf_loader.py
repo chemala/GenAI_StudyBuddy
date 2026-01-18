@@ -1,10 +1,14 @@
-import pdfplumber
+import pymupdf
+
 
 def extract_pdf_text_from_path(path):
-    text = ""
-    with pdfplumber.open(path) as pdf:
-        for page in pdf.pages:
-            t = page.extract_text()
-            if t:
-                text += t + "\n"
-    return text
+    pages = []
+    doc = pymupdf.open(path)
+
+    for i, page in enumerate(doc):
+        text = page.get_text()
+        if text.strip():
+            pages.append(f"[PAGE {i + 1}]\n{text.strip()}")
+
+    doc.close()
+    return "\n\n".join(pages)
