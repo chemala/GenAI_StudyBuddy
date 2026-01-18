@@ -3,6 +3,7 @@ from config import TOP_K
 from embeddings.embedder import embedder
 from llm.model import get_llm
 
+SIMILARITY_THRESHOLD = 0.4
 
 def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, top_k=TOP_K):
     # Embed question
@@ -12,8 +13,33 @@ def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, to
     ).astype("float32")
 
     # Retrieve from FAISS - vector database
-    D, I = index.search(q_emb, top_k)
-    local_context = "\n".join(chunks[i] for i in I[0])
+    d, i = index.search(q_emb, top_k)
+
+    # Filtering chunks by relevance
+    relevant_chunks = []
+    chunk_scores = []
+
+    for ci, dist in zip(i[0], d[0]):
+        similarity = 1 - (dist ** 2 / 2)
+
+        if similarity > SIMILARITY_THRESHOLD:
+            relevant_chunks.append(chunks[ci])
+            chunk_scores.append(similarity)
+
+        print(f"Chunk {ci}: similarity = {similarity:.3f}, distance = {dist:.3f}")
+
+    if not relevant_chunks:
+        return ("I don't have enough relevant information in the lecture notes to answer this question. "
+                "Could you rephrase or ask something more specific?"), chat_history
+
+    avg_relevance = sum(chunk_scores) / len(chunk_scores) if chunk_scores else 0.0
+    print(f"Average chunk relevance: {avg_relevance:.3f}")
+
+    # Sort relevant chunks, more relevant first
+    sorted_chunks_scores = sorted(zip(relevant_chunks, chunk_scores), key=lambda x: x[1], reverse=True)
+    relevant_chunks = [chunk for chunk, score in sorted_chunks_scores]
+
+    local_context = "\n".join(relevant_chunks)
 
     # Optional web search
     web_context = ""
@@ -35,7 +61,10 @@ def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, to
         )
 
     prompt = f"""<s>[INST]
-Based *strictly* on the following context and previous conversation, formulate a helpful response to the query. Provide information or tips *only as directly relevant* to the question and found within the context. Do not ask clarifying questions, introduce new topics, or discuss linguistic nuances unless explicitly asked about them in the question.
+Based *strictly* on the following context and previous conversation, formulate a helpful response to the query. 
+Provide information or tips *only as directly relevant* to the question and found within the context. 
+Do not ask clarifying questions, introduce new topics, or discuss linguistic nuances unless explicitly asked 
+about them in the question.
 
 Context:
 {context}
@@ -64,6 +93,11 @@ Question:
     )
 
     answer = result.choices[0].message.content
+
+    if avg_relevance < 0.5:
+        answer = f"[Low confidence - limited relevant information found]\n\n{answer}"
+
+    print(f"Retrieved {len(relevant_chunks)} relevant chunks (avg similarity: {avg_relevance:.3f})")
     print(answer)
 
     # Update chat history - append QUESTION and ANSWER
