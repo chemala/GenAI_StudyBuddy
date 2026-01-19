@@ -1,7 +1,7 @@
 TAVILY_API_KEY = ""
 HF_TOKEN = ""
 
-MODEL_ID = "deepseek-ai/DeepSeek-V3.2"
+MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
 
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 240
