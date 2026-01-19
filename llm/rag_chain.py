@@ -5,7 +5,8 @@ from llm.model import get_llm
 
 SIMILARITY_THRESHOLD = 0.4
 
-def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, top_k=TOP_K):
+
+def retrieve_relevant_chunks(question, index, chunks, top_k=TOP_K, threshold=SIMILARITY_THRESHOLD):
     # Embed question
     q_emb = embedder.encode(
         [question],
@@ -22,15 +23,11 @@ def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, to
     for ci, dist in zip(i[0], d[0]):
         similarity = 1 - (dist ** 2 / 2)
 
-        if similarity > SIMILARITY_THRESHOLD:
+        if similarity > threshold:
             relevant_chunks.append(chunks[ci])
             chunk_scores.append(similarity)
 
         print(f"Chunk {ci}: similarity = {similarity:.3f}, distance = {dist:.3f}")
-
-    if not relevant_chunks:
-        return ("I don't have enough relevant information in the lecture notes to answer this question. "
-                "Could you rephrase or ask something more specific?"), chat_history
 
     avg_relevance = sum(chunk_scores) / len(chunk_scores) if chunk_scores else 0.0
     print(f"Average chunk relevance: {avg_relevance:.3f}")
@@ -38,6 +35,19 @@ def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, to
     # Sort relevant chunks, more relevant first
     sorted_chunks_scores = sorted(zip(relevant_chunks, chunk_scores), key=lambda x: x[1], reverse=True)
     relevant_chunks = [chunk for chunk, score in sorted_chunks_scores]
+
+    return relevant_chunks, chunk_scores, avg_relevance
+
+
+def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, top_k=TOP_K):
+
+    relevant_chunks, chunk_scores, avg_relevance = retrieve_relevant_chunks(
+        question, index, chunks, top_k
+    )
+
+    if not relevant_chunks:
+        return ("I don't have enough relevant information in the lecture notes to answer this question. "
+                "Could you rephrase or ask something more specific?"), chat_history
 
     local_context = "\n".join(relevant_chunks)
 
