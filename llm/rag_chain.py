@@ -1,33 +1,29 @@
 from tavily import TavilyClient
 from config import TOP_K
-from embeddings.embedder import embedder
+from embeddings.embedder import embed
 from llm.model import get_llm
 
-SIMILARITY_THRESHOLD = 0.4
-
+SIMILARITY_THRESHOLD = 0.22 #  (0.2 - permissive | 0.4 - strict)
 
 def retrieve_relevant_chunks(question, index, chunks, top_k=TOP_K, threshold=SIMILARITY_THRESHOLD):
-    # Embed question
-    q_emb = embedder.encode(
-        [question],
-        normalize_embeddings=True
-    ).astype("float32")
 
-    # Retrieve from FAISS - vector database
-    d, i = index.search(q_emb, top_k)
+    q_emb = embed([question])
+    d, i = index.search(q_emb, top_k)   # vector database
+
+    # DEBUG
+    print(f"DEBUG - Raw distances: {d[0]}")
+    print(f"DEBUG - Max possible cosine sim should be ~1.0")
 
     # Filtering chunks by relevance
     relevant_chunks = []
     chunk_scores = []
 
-    for ci, dist in zip(i[0], d[0]):
-        similarity = 1 - (dist ** 2 / 2)
-
+    for ci, similarity in zip(i[0], d[0]):
         if similarity > threshold:
             relevant_chunks.append(chunks[ci])
             chunk_scores.append(similarity)
 
-        print(f"Chunk {ci}: similarity = {similarity:.3f}, distance = {dist:.3f}")
+        print(f"Chunk {ci}: similarity = {similarity:.3f}")
 
     avg_relevance = sum(chunk_scores) / len(chunk_scores) if chunk_scores else 0.0
     print(f"Average chunk relevance: {avg_relevance:.3f}")
@@ -104,7 +100,7 @@ Question:
 
     answer = result.choices[0].message.content
 
-    if avg_relevance < 0.5:
+    if avg_relevance < 0.3:
         answer = f"[Low confidence - limited relevant information found]\n\n{answer}"
 
     print(f"Retrieved {len(relevant_chunks)} relevant chunks (avg similarity: {avg_relevance:.3f})")
