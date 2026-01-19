@@ -40,8 +40,7 @@ def generate_flashcards(flashcard_topic, num_flashcards, mode, index, chunks, ta
                 q_emb.flatten(),
                 web_results,
                 embedder,
-                top_n=3,
-                similarity_threshold=0.5
+                top_n=3
             )
             if web_results:
                 web_context = "\n".join(web_results)

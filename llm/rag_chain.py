@@ -52,10 +52,6 @@ STRICT MODE INSTRUCTIONS:
 - Do NOT make inferences, interpretations, or draw conclusions beyond what's directly written
 - Do NOT speculate about relationships, importance, or rankings unless explicitly stated
 - If the context doesn't directly answer the question, clearly state what IS available and what is MISSING
-- Use phrases like:
-  * "The document explicitly states..."
-  * "According to the context..."
-  * "The information provided does not specify..."
 - Be precise and literal in your interpretation
 
 {context}
@@ -91,10 +87,6 @@ INFERENCE MODE INSTRUCTIONS:
   * Causal relationships and connections described
   * Context from surrounding material
   * Repeated themes or concepts
-
-- CLEARLY DISTINGUISH between explicit facts and inferences:
-  * For explicit info: "The document states...", "According to slide X...", "The text explicitly mentions..."
-  * For inferences: "Based on the emphasis given...", "The coverage suggests...", "Given that X is discussed in detail...", "This appears to be prioritized because..."
 
 - When making inferences:
   * Explain your reasoning
@@ -140,7 +132,6 @@ def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history,
                 web_results,
                 embedder,
                 top_n=3,
-                similarity_threshold=0.5
             )
             if web_results:
                 web_context = "\n".join(web_results)

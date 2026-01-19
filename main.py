@@ -2,7 +2,7 @@ import gradio as gr
 from config import TAVILY_API_KEY
 from embeddings.index import build_index
 from ingestion.chunking import chunk_text
-from ingestion.pdf_loader import extract_pdf_text_from_path
+from ingestion.file_loader import extract_text_or_pdf
 from llm.flashcards import generate_flashcards
 from llm.rag_chain import rag_with_llm
 from state import state
@@ -14,7 +14,7 @@ def build(files):
 
     texts = []
     for f in files:
-        text = extract_pdf_text_from_path(f)
+        text = extract_text_or_pdf(f)
         texts += chunk_text(text)
 
     idx, ch = build_index(texts)
