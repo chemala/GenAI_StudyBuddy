@@ -4,138 +4,49 @@ import re
 from typing import List
 
 
-def chunk_text_simple(text: str, chunk_size: int = 500, overlap: int = 100) -> List[str]:
+def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
     """
-    Simple character-based chunking with overlap
+    Split text into overlapping chunks for better retrieval.
 
     Args:
-        text: Input text
-        chunk_size: Target size of each chunk in characters
-        overlap: Number of overlapping characters between chunks
+        text: The text to chunk
+        chunk_size: Size of each chunk in characters
+        overlap: Number of characters to overlap between chunks
 
     Returns:
-        List of text chunks
+        list: List of text chunks
     """
+    # FIX: Handle empty or very short text
+    if not text or len(text.strip()) == 0:
+        print("⚠️ WARNING: Empty text provided to chunking function")
+        return []
+
+    # FIX: If text is smaller than chunk size, return it as a single chunk
+    if len(text) <= chunk_size:
+        print(f"ℹ️ Text ({len(text)} chars) is smaller than chunk size. Returning as single chunk.")
+        return [text.strip()]
+
     chunks = []
     start = 0
 
+    # OLD CODE (worked but no validation):
+    # while start < len(text):
+    #     end = start + chunk_size
+    #     chunks.append(text[start:end])
+    #     start = end - overlap
+
+    # NEW CODE: Same logic but with filtering of empty chunks
     while start < len(text):
         end = start + chunk_size
+        chunk = text[start:end].strip()  # FIX: Strip whitespace from chunks
 
-        # Try to break at sentence boundaries if possible
-        if end < len(text):
-            # Look for sentence endings near the chunk boundary
-            chunk_text = text[start:end]
-            last_period = chunk_text.rfind('.')
-            last_newline = chunk_text.rfind('\n')
+        # FIX: Only add chunks with meaningful content (at least 10 characters)
+        if len(chunk) >= 10:
+            chunks.append(chunk)
 
-            # Break at the last sentence or paragraph if found
-            break_point = max(last_period, last_newline)
-            if break_point > chunk_size * 0.5:  # Only if we're past halfway
-                end = start + break_point + 1
-
-        chunks.append(text[start:end].strip())
         start = end - overlap
 
-    return [c for c in chunks if c]  # Remove empty chunks
-
-
-def chunk_text_semantic(text: str, max_chunk_size: int = 800, min_chunk_size: int = 200) -> List[str]:
-    """
-    Semantic chunking that preserves slide/section boundaries
-    Better for structured documents like PDFs with clear sections
-
-    Args:
-        text: Input text
-        max_chunk_size: Maximum chunk size
-        min_chunk_size: Minimum chunk size
-
-    Returns:
-        List of text chunks
-    """
-    # Split by page markers first
-    pages = re.split(r'\[PAGE \d+\]', text)
-
-    chunks = []
-    current_chunk = ""
-
-    for page in pages:
-        page = page.strip()
-        if not page:
-            continue
-
-        # Split page into sections (based on headers or bullet points)
-        sections = re.split(r'\n■\s+|\n#+\s+', page)
-
-        for section in sections:
-            section = section.strip()
-            if not section:
-                continue
-
-            # If adding this section would exceed max size, save current chunk
-            if len(current_chunk) + len(section) > max_chunk_size and len(current_chunk) >= min_chunk_size:
-                chunks.append(current_chunk.strip())
-                current_chunk = section
-            else:
-                # Add to current chunk
-                current_chunk += "\n" + section if current_chunk else section
-
-    # Add final chunk
-    if current_chunk.strip():
-        chunks.append(current_chunk.strip())
-
-    return chunks
-
-
-def chunk_text_sliding_window(text: str, chunk_size: int = 1200, overlap: int = 240) -> List[str]:
-    """
-    Sliding window chunking with larger chunks for better context
-    Recommended for RAG systems
-
-    Args:
-        text: Input text
-        chunk_size: Size of each chunk
-        overlap: Overlap between consecutive chunks
-
-    Returns:
-        List of text chunks
-    """
-    chunks = []
-
-    # Split by sentences first
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-
-    current_chunk = []
-    current_length = 0
-
-    for sentence in sentences:
-        sentence_length = len(sentence)
-
-        if current_length + sentence_length > chunk_size and current_chunk:
-            # Save current chunk
-            chunks.append(' '.join(current_chunk))
-
-            # Start new chunk with overlap
-            # Keep last few sentences for context
-            overlap_sentences = []
-            overlap_length = 0
-
-            for sent in reversed(current_chunk):
-                if overlap_length + len(sent) <= overlap:
-                    overlap_sentences.insert(0, sent)
-                    overlap_length += len(sent)
-                else:
-                    break
-
-            current_chunk = overlap_sentences
-            current_length = overlap_length
-
-        current_chunk.append(sentence)
-        current_length += sentence_length
-
-    # Add final chunk
-    if current_chunk:
-        chunks.append(' '.join(current_chunk))
+    print(f"✓ Created {len(chunks)} chunks from {len(text)} characters")
 
     return chunks
 

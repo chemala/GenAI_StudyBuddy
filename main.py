@@ -9,19 +9,73 @@ from state import state
 
 
 def build(files):
+    """
+    Build the document index from uploaded PDF or .txt files.
+
+    Args:
+        files: List of uploaded PDF/.txt file paths
+
+    Returns:
+        str: Status message for the user
+    """
     if not files:
         return "No files uploaded."
 
-    texts = []
-    for f in files:
-        text = extract_text_or_pdf(f)
-        texts += chunk_text(text)
+    # FIX: Add comprehensive error handling for the entire build process
+    try:
+        texts = []
+        total_chars = 0
 
-    idx, ch = build_index(texts)
-    state["index"] = idx
-    state["chunks"] = ch
+        # OLD CODE (no error handling):
+        # for f in files:
+        #     text = extract_pdf_text_from_path(f)
+        #     texts += chunk_text(text)
 
-    return f"Indexed {len(ch)} chunks."
+        # NEW CODE: Process each file with individual error handling
+        for f in files:
+            try:
+                # Extract text from PDF (with validation)
+                text = extract_text_or_pdf(f)
+                total_chars += len(text)
+
+                # Chunk the text (with validation)
+                chunks = chunk_text(text)
+                texts += chunks
+
+                print(f"✓ Processed {f.name}: {len(chunks)} chunks created")
+
+            except ValueError as ve:
+                # Specific error (empty PDF, corrupted file, etc.)
+                return f"❌ Error processing {f.name}: {ve}"
+            except Exception as e:
+                # Unexpected error
+                return f"❌ Unexpected error processing {f.name}: {e}"
+
+        # FIX: Validate that we have chunks before building index
+        if not texts or len(texts) == 0:
+            return "❌ No text could be extracted from the uploaded PDFs. Please check if they contain readable text."
+
+        print(f"\n📊 Total: {len(texts)} chunks from {total_chars} characters")
+
+        # Build the index (with validation)
+        idx, ch = build_index(texts)
+
+        # Store in global state
+        state["index"] = idx
+        state["chunks"] = ch
+
+        # FIX: More informative success message
+        return f"✅ Success! Indexed {len(ch)} chunks from {len(files)} PDF(s). You can now ask questions about your documents."
+
+    except ValueError as ve:
+        # Specific errors from our validation
+        return f"❌ Indexing failed: {ve}"
+    except Exception as e:
+        # Catch-all for unexpected errors
+        print(f"❌ Unexpected error during index build: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"❌ An unexpected error occurred: {e}. Please check the console for details."
 
 
 def format_chat_history_for_display():

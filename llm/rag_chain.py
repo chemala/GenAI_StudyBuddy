@@ -31,7 +31,6 @@ def mmr(query_embedding, doc_embeddings, k=TOP_K, lambda_param=0.7):
 
     return selected
 
-
 def build_strict_prompt(local_context, web_context, question):
     """
     Strict prompt: Only answers with explicitly stated information.
@@ -80,6 +79,7 @@ def build_inference_prompt(local_context, web_context, question):
 
 INFERENCE MODE INSTRUCTIONS:
 - Start with EXPLICIT information from the context
+- Look for REPEATED concepts across multiple excerpts - that indicates core content
 - When explicit information is insufficient, make REASONABLE INFERENCES based on:
   * Emphasis and space devoted to topics (more coverage = likely more important)
   * Order of presentation (items listed first may indicate priority)
@@ -105,70 +105,252 @@ ANSWER:"""
     return prompt
 
 
-# Integration into your RAG function
-def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history,
-                 top_k=TOP_K, allow_inference=False):
-    """
-    Enhanced RAG with strict vs inference mode.
 
-    Args:
-        allow_inference: If True, uses inference prompt. If False, uses strict prompt.
-    """
-    # Compute embeddings for query and chunks
-    q_emb = embedder.encode([question], normalize_embeddings=True).astype("float32")[0]
-    chunk_embs = embedder.encode(chunks, normalize_embeddings=True).astype("float32")
+def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history, top_k=TOP_K):
+    # Embed question
+    q_emb = embedder.encode(
+        [question],
+        normalize_embeddings=True
+    ).astype("float32")
 
-    # Use MMR to select diverse but relevant chunks
-    selected = mmr(q_emb, chunk_embs, k=top_k)
-    local_context = "\n".join(chunks[i] for i in selected)
+    # Retrieve from FAISS - vector database
+    D, I = index.search(q_emb, top_k)
+    local_context = "\n".join(chunks[i] for i in I[0])
 
-    # Smarter web search logic
+    # Optional web search
     web_context = ""
     if mode in ["web", "hybrid"]:
-        if should_use_web_search(question, local_context):
-            web_results = tavily_search(question, tavily_api_key, k=5)
-            web_results = filter_relevant_web_results(
-                q_emb.flatten(),
-                web_results,
-                embedder,
-                top_n=3,
-            )
-            if web_results:
-                web_context = "\n".join(web_results)
+        tavily = TavilyClient(api_key=tavily_api_key)
+        web = tavily.search(question, max_results=3)
+        web_context = "\n".join(r["content"] for r in web['results'])
 
-    # Choose prompt based on mode
-    if allow_inference:
-        prompt = build_inference_prompt(local_context, web_context, question)
-    else:
-        prompt = build_strict_prompt(local_context, web_context, question)
+    # Build prompt
+    context = local_context
+    if web_context:
+        context += "\n\nWeb context:\n" + web_context
 
-    print(f"\n{'=' * 60}")
-    print(f"MODE: {'INFERENCE' if allow_inference else 'STRICT'}")
-    print(f"{'=' * 60}")
-    print(prompt)
-    print(f"{'=' * 60}\n")
+    # Include chat history in the prompt (FIXED format)
+    history_str = ""
+    if chat_history:
+        history_str = "\n\nPrevious conversation:\n" + "\n".join(
+            [f"{h['role'].capitalize()}: {h['content']}" for h in chat_history]
+        )
 
-    # Generate answer
+    prompt = f"""<s>[INST]
+Based *strictly* on the following context and previous conversation, formulate a helpful response to the query. Provide information or tips *only as directly relevant* to the question and found within the context. Do not ask clarifying questions, introduce new topics, or discuss linguistic nuances unless explicitly asked about them in the question.
+
+Context:
+{context}
+{history_str}
+
+Question:
+{question}
+[/INST]
+"""
+
+    # Generate answer using lazy-loaded LLM
     llm = get_llm()
     result = llm.chat_completion(
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful study assistant that answers questions accurately based on provided context."
+                "content": "You are a helpful study assistant that creates clear explanations and flashcards."
             },
             {
                 "role": "user",
                 "content": prompt
             }
         ],
-        max_tokens=800,
-        temperature=0.2,
+        max_tokens=600, # todo: can be in config / UI
+        temperature=0.3, # todo: can be in config / UI
     )
 
     answer = result.choices[0].message.content
     print(answer)
 
-    # Update chat history
+    # Update chat history - append QUESTION and ANSWER
+    chat_history.append({"role": "user", "content": question})
+    chat_history.append({"role": "assistant", "content": answer})
+
+    return answer, chat_history
+
+
+def rag_with_llm_aykut(question, mode, index, chunks, tavily_api_key, chat_history, top_k=TOP_K):
+    # ============== NEW: Detect document summary queries and adjust retrieval ==============
+    # For broad queries like "What does this PDF talk about?", we need MORE chunks
+    # to get better topic coverage and avoid over-emphasizing minor sections
+    is_summary_query = None  # is_document_summary_query(question)
+
+    if is_summary_query:
+        # OLD APPROACH (used fixed top_k=5):
+        # This retrieved too few chunks, causing topic bias toward semantically rich sections
+
+        # NEW APPROACH: Retrieve more chunks for better topic coverage
+        # Use 20 chunks (or all available if less) to capture dominant themes
+        adaptive_top_k = min(20, len(chunks))
+        print(f"\n{'=' * 60}")
+        print(f"📋 DOCUMENT SUMMARY QUERY DETECTED")
+        print(f"   Using {adaptive_top_k} chunks (instead of {top_k}) for better topic coverage")
+        print(f"   This helps identify DOMINANT vs MINOR themes")
+        print(f"{'=' * 60}\n")
+    else:
+        # For specific questions, use normal top_k
+        adaptive_top_k = top_k
+    # =======================================================================================
+
+    # Embed question
+    q_emb = embedder.encode(
+        [question],
+        normalize_embeddings=True
+    ).astype("float32")
+
+    # ============== FIX: Added validation for index and chunks ==============
+    # Check if we have chunks to search
+    if not chunks or len(chunks) == 0:
+        # CRITICAL: If no chunks available, return error message instead of crashing
+        error_msg = "⚠️ No documents have been indexed yet. Please upload and build the index first."
+        chat_history.append({"role": "user", "content": question})
+        chat_history.append({"role": "assistant", "content": error_msg})
+        return error_msg, chat_history
+
+    # Check if index has been built with content
+    if index.ntotal == 0:
+        # CRITICAL: If index is empty, we can't retrieve anything
+        error_msg = "⚠️ The index is empty. Please re-upload your documents and rebuild the index."
+        chat_history.append({"role": "user", "content": question})
+        chat_history.append({"role": "assistant", "content": error_msg})
+        return error_msg, chat_history
+    # =========================================================================
+
+    # Retrieve from FAISS - vector database
+    # NEW: Use adaptive_top_k instead of fixed top_k
+    D, I = index.search(q_emb, adaptive_top_k)
+
+    # ============== FIX: Validate retrieved indices before accessing chunks ==============
+    # OLD CODE (BUGGY - could access invalid indices):
+    # local_context = "\n".join(chunks[i] for i in I[0])
+
+    # NEW CODE: Filter out invalid indices (FAISS returns -1 for no results)
+    # and ensure indices are within bounds of chunks array
+    valid_indices = []
+    for idx in I[0]:
+        # Check: index must be >= 0 and < total number of chunks
+        if 0 <= idx < len(chunks):
+            valid_indices.append(idx)
+
+    # Build context from valid retrieved chunks
+    retrieved_chunks = [chunks[i] for i in valid_indices]
+    local_context = "\n\n---\n\n".join(retrieved_chunks)  # Improved separator for readability
+
+    # Debug logging: Show what was retrieved
+    print(f"\n{'=' * 60}")
+    print(f"RETRIEVAL DEBUG INFO:")
+    print(f"Question: {question}")
+    print(f"Retrieved {len(valid_indices)} chunks from index")
+    print(f"Chunk indices: {valid_indices}")
+    print(f"First chunk preview: {retrieved_chunks[0][:200] if retrieved_chunks else 'NONE'}...")
+    print(f"{'=' * 60}\n")
+    # =====================================================================================
+
+    # Optional web search
+    web_context = ""
+    if mode in ["web", "hybrid"]:
+        # FIX: Add try-except for web search failures
+        try:
+            tavily = TavilyClient(api_key=tavily_api_key)
+            web = tavily.search(question, max_results=3)
+            web_context = "\n".join(r["content"] for r in web['results'])
+        except Exception as e:
+            # Log web search error but don't crash - continue with local context
+            print(f"⚠️ Web search failed: {e}")
+            web_context = ""
+
+    # Build prompt
+    # FIX: Check if we have any context at all
+    if not local_context and not web_context:
+        # No context retrieved - inform user
+        no_context_msg = "I couldn't find relevant information in the uploaded documents to answer your question. Please try rephrasing or check if the document contains this information."
+        chat_history.append({"role": "user", "content": question})
+        chat_history.append({"role": "assistant", "content": no_context_msg})
+        return no_context_msg, chat_history
+
+    context = local_context
+    if web_context:
+        context += "\n\n=== Additional Web Context ===\n" + web_context
+
+    # Include chat history in the prompt (FIXED format)
+    history_str = ""
+    if chat_history:
+        history_str = "\n\nPrevious conversation:\n" + "\n".join(
+            [f"{h['role'].capitalize()}: {h['content']}" for h in chat_history[-6:]]
+            # FIX: Only last 3 exchanges to avoid token limits
+        )
+
+    # ============== NEW: Conditional prompt based on query type ==============
+    # Use specialized prompt for document summaries, standard prompt for specific questions
+
+    if is_summary_query:
+        # DOCUMENT SUMMARY QUERY - use specialized prompt
+        # This prompt emphasizes proportional representation and guards against topic inversion
+        prompt = None  # build_summary_prompt(question, context, retrieved_chunks, history_str)
+        print(f"   Using SPECIALIZED SUMMARY PROMPT (with keyword frequency analysis)")
+    else:
+        # SPECIFIC QUESTION - use standard prompt
+        # OLD APPROACH (single prompt for all queries):
+        # This didn't distinguish between "What is bias?" and "What does this PDF talk about?"
+        # causing the same retrieval and prompting strategy for very different query types
+
+        # NEW APPROACH: Keep the improved specific-question prompt
+        prompt = f"""<s>[INST]
+You are a Study Buddy assistant helping students learn from their documents.
+
+INSTRUCTIONS:
+1. Answer the question using ONLY information from the context below
+2. If the answer is in the context, provide a clear and detailed explanation
+3. If the context doesn't contain enough information, say so honestly
+4. Use examples from the context when possible
+5. Be concise but thorough
+
+Context from your documents:
+{context}
+{history_str}
+
+Student's Question:
+{question}
+
+Remember: Base your answer strictly on the context provided. If you're not sure, say so.
+[/INST]
+"""
+        print(f"   Using STANDARD Q&A PROMPT")
+
+    # ===========================================================================
+    print(f"{'=' * 60}\n")
+
+    # Generate answer using lazy-loaded LLM
+    llm = get_llm()
+    result = llm.chat_completion(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful study assistant that creates clear explanations based on provided documents. Always cite information from the context."
+                # FIX: More specific system prompt
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        max_tokens=600,  # todo: can be in config / UI
+        temperature=0.3,  # todo: can be in config / UI
+    )
+
+    answer = result.choices[0].message.content
+    print(f"\n{'=' * 60}")
+    print(f"FINAL ANSWER:")
+    print(answer)
+    print(f"{'=' * 60}\n")
+
+    # Update chat history - append QUESTION and ANSWER
     chat_history.append({"role": "user", "content": question})
     chat_history.append({"role": "assistant", "content": answer})
 
