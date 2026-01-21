@@ -3,9 +3,9 @@ from config import TOP_K
 from embeddings.embedder import embed
 from llm.model import get_llm
 
-SIMILARITY_THRESHOLD = 0.22 #  (0.2 - permissive | 0.4 - strict)
+#SIMILARITY_THRESHOLD = 0.22 #  (0.2 - permissive | 0.4 - strict)
 
-def retrieve_relevant_chunks(question, index, chunks, top_k=TOP_K, threshold=SIMILARITY_THRESHOLD):
+def retrieve_relevant_chunks(question, index, chunks, top_k=TOP_K, gap_threshold=0.1):
 
     q_emb = embed([question])
     d, i = index.search(q_emb, top_k)   # vector database
@@ -18,12 +18,16 @@ def retrieve_relevant_chunks(question, index, chunks, top_k=TOP_K, threshold=SIM
     relevant_chunks = []
     chunk_scores = []
 
+    top_score = d[0][0] if len(d[0]) > 0 else 0
+    print(f"Top score: {top_score:.3f}, Gap threshold: {gap_threshold}")
+
     for ci, similarity in zip(i[0], d[0]):
-        if similarity > threshold:
+        score_gap = top_score - similarity
+        if score_gap <= gap_threshold:
             relevant_chunks.append(chunks[ci])
             chunk_scores.append(similarity)
 
-        print(f"Chunk {ci}: similarity = {similarity:.3f}")
+        print(f"Chunk {ci}: similarity = {similarity:.3f} (gap: {score_gap:.3f})")
 
     avg_relevance = sum(chunk_scores) / len(chunk_scores) if chunk_scores else 0.0
     print(f"Average chunk relevance: {avg_relevance:.3f}")
