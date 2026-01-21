@@ -18,113 +18,134 @@ from config import TOP_K
 from embeddings.embedder import embedder
 from llm.model import get_llm
 from retrieval.web import tavily_search, filter_relevant_web_results
-from llm.rag_chain import mmr
+from llm.rag_chain import mmr, reformulate_query_for_web
 
+
+def retrieve_context_rag_style(
+    query: str,
+    mode: str,
+    chunks: List[str],
+    tavily_api_key: Optional[str],
+    top_k: int,
+    llm,
+):
+    """
+    Shared RAG-style retrieval used by both Q&A and flashcard generation.
+    """
+
+    if not chunks:
+        return ""
+
+    # --- Embeddings ---
+    q_emb = embedder.encode(
+        [query],
+        normalize_embeddings=True
+    ).astype("float32")[0]
+
+    chunk_embs = embedder.encode(
+        chunks,
+        normalize_embeddings=True
+    ).astype("float32")
+
+    # --- MMR retrieval ---
+    selected = mmr(q_emb, chunk_embs, k=min(top_k, len(chunks)))
+    selected = [i for i in selected if 0 <= i < len(chunks)]
+
+    local_context = "\n\n---\n\n".join(chunks[i] for i in selected)
+
+    # --- Web augmentation (same as rag_with_llm) ---
+    web_context = ""
+    if mode in ["web"] and tavily_api_key:
+        try:
+            search_query = reformulate_query_for_web(query, local_context, llm)
+            print(f"Flashcard web query: {search_query}")
+
+            web_results = tavily_search(search_query, tavily_api_key, k=5)
+            web_results = filter_relevant_web_results(
+                q_emb.flatten(),
+                web_results,
+                embedder,
+                top_n=3,
+            )
+
+            if web_results:
+                web_context = "\n\n".join(web_results)
+
+        except Exception as e:
+            print(f"Web augmentation failed: {e}")
+
+    # --- Merge context ---
+    parts = []
+    if local_context:
+        parts.append(f"DOCUMENT CONTEXT:\n{local_context}")
+    if web_context:
+        parts.append(f"ADDITIONAL WEB SOURCES:\n{web_context}")
+
+    return "\n\n".join(parts)
 
 def generate_flashcards(
-        flashcard_topic: str,
-        num_flashcards: int,
-        mode: str,
-        index,
-        chunks: List[str],
-        tavily_api_key: Optional[str] = None,
-        top_k: int = None
+    flashcard_topic: str,
+    num_flashcards: int,
+    mode: str,
+    index,
+    chunks: List[str],
+    tavily_api_key: Optional[str] = None,
+    top_k: int = None
 ) -> List[Dict[str, str]]:
-    """
-    Generate high-quality study flashcards focused on conceptual understanding.
 
-    Uses MMR (Maximal Marginal Relevance) for diverse chunk retrieval and
-    an enhanced prompt that enforces quality rules to avoid trivia questions.
+    if not chunks:
+        print("No document chunks available")
+        return []
 
-    Args:
-        flashcard_topic: Topic to generate flashcards about
-        num_flashcards: Number of flashcards to generate
-        mode: Retrieval mode - "local", "web", or "hybrid"
-        index: FAISS index (kept for API compatibility, MMR used instead)
-        chunks: Document chunks from the PDF
-        tavily_api_key: API key for Tavily web search (required for web/hybrid modes)
-        top_k: Number of chunks to retrieve (default: 15 for comprehensive coverage)
-
-    Returns:
-        List of flashcard dicts with 'question' and 'answer' keys
-    """
-    # Use more chunks than standard RAG for comprehensive flashcard coverage
     if top_k is None:
         top_k = min(15, len(chunks))
     else:
         top_k = min(top_k, len(chunks))
 
-    # ======================== LOGGING ========================
     print(f"\n{'=' * 60}")
-    print(f"   GENERATING FLASHCARDS")
+    print("   GENERATING FLASHCARDS (RAG-CHAIN STYLE)")
     print(f"   Topic: {flashcard_topic}")
-    print(f"   Count: {num_flashcards}")
     print(f"   Mode: {mode}")
-    print(f"   Retrieving {top_k} chunks using MMR for diversity")
+    print(f"   top_k (MMR): {top_k}")
     print(f"{'=' * 60}\n")
 
-    # ======================== RETRIEVAL ========================
-    # Construct comprehensive query for better retrieval
-    query = (
-        f"Comprehensive information about {flashcard_topic}, "
-        f"including definitions, mechanisms, examples, limitations, and implications"
-    )
-
-    # Compute embeddings
-    q_emb = embedder.encode([query], normalize_embeddings=True).astype("float32")[0]
-    chunk_embs = embedder.encode(chunks, normalize_embeddings=True).astype("float32")
-
-    # Use MMR for diverse but relevant chunk selection
-    # This prevents redundant chunks and improves flashcard variety
-    selected_indices = mmr(q_emb, chunk_embs, k=top_k)
-    local_context = "\n\n---\n\n".join(chunks[i] for i in selected_indices)
-
-    print(f"   ✓ Retrieved {len(selected_indices)} diverse chunks via MMR\n")
-
-    # ======================== WEB AUGMENTATION ========================
-    web_context = ""
-    if mode in ["web", "hybrid"] and tavily_api_key:
-        print(f"     Fetching web results for augmentation...")
-        try:
-            web_results = tavily_search(query, tavily_api_key, k=5)
-            web_results = filter_relevant_web_results(
-                q_emb.flatten(),
-                web_results,
-                embedder,
-                top_n=3
-            )
-            if web_results:
-                web_context = "\n\n".join(web_results)
-                print(f"     Added {len(web_results)} relevant web sources\n")
-            else:
-                print(f"     No relevant web results found\n")
-        except Exception as e:
-            print(f"     Web search failed: {e}\n")
-
-    # ======================== BUILD CONTEXT ========================
-    context_parts = []
-    if local_context:
-        context_parts.append(f"DOCUMENT CONTEXT:\n{local_context}")
-    if web_context:
-        context_parts.append(f"ADDITIONAL WEB SOURCES:\n{web_context}")
-
-    full_context = "\n\n".join(context_parts)
-
-    # ======================== ENHANCED PROMPT ========================
-    prompt = _build_flashcard_prompt(flashcard_topic, num_flashcards, full_context)
-
-    # ======================== LLM GENERATION ========================
     llm = get_llm()
 
-    llm_response = llm.chat_completion(
+    # --- RAG-style query (same philosophy as rag_with_llm) ---
+    query = (
+        f"Comprehensive explanation of {flashcard_topic}, "
+        f"including mechanisms, trade-offs, implications, limitations, and examples"
+    )
+
+    # --- SHARED RAG RETRIEVAL ---
+    full_context = retrieve_context_rag_style(
+        query=query,
+        mode=mode,
+        chunks=chunks,
+        tavily_api_key=tavily_api_key,
+        top_k=top_k,
+        llm=llm,
+    )
+
+    if not full_context.strip():
+        print("No relevant context retrieved")
+        return []
+
+    # --- Prompt stays unchanged (this is your strength) ---
+    prompt = _build_flashcard_prompt(
+        flashcard_topic,
+        num_flashcards,
+        full_context
+    )
+
+    # --- LLM generation ---
+    result = llm.chat_completion(
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are an expert educational content creator specializing in "
-                    "high-quality study flashcards that test conceptual understanding, "
-                    "not rote memorization. You create flashcards that would help "
-                    "students succeed in oral exams and written theory tests."
+                    "conceptual university-level flashcards."
                 )
             },
             {
@@ -132,16 +153,13 @@ def generate_flashcards(
                 "content": prompt
             }
         ],
-        max_tokens=2000,  # Generous limit for quality conceptual answers
-        temperature=0.4,  # Balanced: some creativity while staying grounded
+        max_tokens=2000,
+        temperature=0.4,
     )
 
-    raw_response = llm_response.choices[0].message.content
+    raw_response = result.choices[0].message.content
 
-    # ======================== PARSE & VALIDATE ========================
     flashcards = _parse_and_validate_flashcards(raw_response)
-
-    # ======================== OUTPUT SUMMARY ========================
     _log_flashcard_summary(flashcards)
 
     return flashcards

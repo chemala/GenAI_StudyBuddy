@@ -46,16 +46,16 @@ def build(files):
 
             except ValueError as ve:
                 # Specific error (empty PDF, corrupted file, etc.)
-                return f"❌ Error processing {f.name}: {ve}"
+                return f"Error processing {f.name}: {ve}"
             except Exception as e:
                 # Unexpected error
-                return f"❌ Unexpected error processing {f.name}: {e}"
+                return f"Unexpected error processing {f.name}: {e}"
 
         # FIX: Validate that we have chunks before building index
         if not texts or len(texts) == 0:
-            return "❌ No text could be extracted from the uploaded PDFs. Please check if they contain readable text."
+            return "No text could be extracted from the uploaded PDFs. Please check if they contain readable text."
 
-        print(f"\n📊 Total: {len(texts)} chunks from {total_chars} characters")
+        print(f"\nTotal: {len(texts)} chunks from {total_chars} characters")
 
         # Build the index (with validation)
         idx, ch = build_index(texts)
@@ -65,17 +65,17 @@ def build(files):
         state["chunks"] = ch
 
         # FIX: More informative success message
-        return f"✅ Success! Indexed {len(ch)} chunks from {len(files)} PDF(s). You can now ask questions about your documents."
+        return f"Success! Indexed {len(ch)} chunks from {len(files)} PDF(s). You can now ask questions about your documents."
 
     except ValueError as ve:
         # Specific errors from our validation
-        return f"❌ Indexing failed: {ve}"
+        return f"Indexing failed: {ve}"
     except Exception as e:
         # Catch-all for unexpected errors
-        print(f"❌ Unexpected error during index build: {e}")
+        print(f"Unexpected error during index build: {e}")
         import traceback
         traceback.print_exc()
-        return f"❌ An unexpected error occurred: {e}. Please check the console for details."
+        return f"An unexpected error occurred: {e}. Please check the console for details."
 
 
 def format_chat_history_for_display():
