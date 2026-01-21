@@ -125,16 +125,15 @@ def rag_with_llm(question, mode, index, chunks, tavily_api_key, chat_history,
     # Smarter web search logic
     web_context = ""
     if mode in ["web", "hybrid"]:
-        if should_use_web_search(question, local_context):
-            web_results = tavily_search(question, tavily_api_key, k=5)
-            web_results = filter_relevant_web_results(
-                q_emb.flatten(),
-                web_results,
-                embedder,
-                top_n=3,
-            )
-            if web_results:
-                web_context = "\n".join(web_results)
+        web_results = tavily_search(question, tavily_api_key, k=5)
+        web_results = filter_relevant_web_results(
+            q_emb.flatten(),
+            web_results,
+            embedder,
+            top_n=3,
+        )
+        if web_results:
+            web_context = "\n".join(web_results)
 
     # Choose prompt based on mode
     if allow_inference:

@@ -88,7 +88,6 @@ def format_chat_history_for_display():
             formatted_history.append([user_msg, assistant_msg])
     return formatted_history
 
-
 def ask(q, mode, api_key, inference_mode):
     """
     Updated ask function with inference mode parameter
