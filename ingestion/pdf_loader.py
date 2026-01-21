@@ -31,13 +31,13 @@ def extract_pdf_text_from_path(path):
     
     except Exception as e:
         # CRITICAL: Handle PDF extraction errors gracefully
-        print(f"❌ ERROR: Failed to extract text from PDF: {e}")
+        print(f"ERROR: Failed to extract text from PDF: {e}")
         raise ValueError(f"Could not read PDF file '{path}'. The file may be corrupted or password-protected.")
     
     # FIX: Validate that we extracted meaningful text
     if not text or len(text.strip()) < 10:
         # Warn if PDF appears to be empty or contains only whitespace
-        print(f"⚠️ WARNING: PDF appears to be empty or contains very little text ({len(text)} characters)")
+        print(f"WARNING: PDF appears to be empty or contains very little text ({len(text)} characters)")
         raise ValueError(f"PDF file '{path}' contains no extractable text. It may be an image-based PDF requiring OCR.")
     
     return text

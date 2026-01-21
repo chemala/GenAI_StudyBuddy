@@ -1,8 +1,7 @@
-from tavily import TavilyClient
 from config import TOP_K
-from embeddings.embedder import embed
+from embeddings.embedder import embed, embedder
 from llm.model import get_llm
-from retrieval.web import extract_keywords, tavily_search, filter_relevant_web_results
+from retrieval.web import tavily_search, filter_relevant_web_results
 from sentence_transformers.util import cos_sim
 import numpy as np
 
@@ -319,25 +318,44 @@ def rag_with_llm(
 
     llm = get_llm()
 
-    # ======================= RETRIEVAL WITH DYNAMIC + MMR =======================
+    # ======================= SELECTION =======================
 
     try:
-        retrieved_chunks, chunk_scores, avg_relevance = retrieve_relevant_chunks(
-            question,
-            index,
+        q_emb = embedder.encode(
+            [question],
+            normalize_embeddings=True
+        ).astype("float32")[0]
+    except Exception as e:
+        error_msg = f"Failed to embed the question: {e}"
+        chat_history.append({"role": "user", "content": question})
+        chat_history.append({"role": "assistant", "content": error_msg})
+        return error_msg, chat_history
+
+    try:
+        chunk_embs = embedder.encode(
             chunks,
-            top_k=top_k,
-            gap_threshold=0.1,
-            use_mmr=True,
-            lambda_param=0.8
-        )
+            normalize_embeddings=True
+        ).astype("float32")
+    except Exception as e:
+        error_msg = f"Failed to embed document chunks: {e}"
+        chat_history.append({"role": "user", "content": question})
+        chat_history.append({"role": "assistant", "content": error_msg})
+        return error_msg, chat_history
+
+    # ======================= RETRIEVAL (MMR) =======================
+
+    try:
+        selected = mmr(q_emb, chunk_embs, k=min(top_k, len(chunks)))
+        valid_indices = [i for i in selected if 0 <= i < len(chunks)]
+        retrieved_chunks = [chunks[i] for i in valid_indices]
+        local_context = "\n\n---\n\n".join(retrieved_chunks)
     except Exception as e:
         error_msg = f"Retrieval failed: {e}"
         chat_history.append({"role": "user", "content": question})
         chat_history.append({"role": "assistant", "content": error_msg})
         return error_msg, chat_history
 
-    if not retrieved_chunks:
+    if not local_context.strip():
         no_context_msg = (
             "I couldn't find relevant information in the uploaded documents "
             "to answer your question. Try rephrasing or check if the document contains this topic."
@@ -345,8 +363,6 @@ def rag_with_llm(
         chat_history.append({"role": "user", "content": question})
         chat_history.append({"role": "assistant", "content": no_context_msg})
         return no_context_msg, chat_history
-
-    local_context = "\n\n---\n\n".join(retrieved_chunks)
 
     # ======================= MODE HANDLING =======================
 
@@ -394,7 +410,7 @@ def rag_with_llm(
 
     print(f"\n{'=' * 60}")
     print(f"MODE: {mode_display}")
-    print(f"Retrieved {len(retrieved_chunks)} chunks (avg similarity: {avg_relevance:.3f})")
+    #print(f"Retrieved {len(retrieved_chunks)} chunks (avg similarity: {avg_relevance:.3f})")
     print(f"{'=' * 60}")
     print(prompt)
     print(f"{'=' * 60}\n")

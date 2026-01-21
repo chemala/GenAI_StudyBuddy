@@ -14,7 +14,6 @@ Key Features:
 import json
 from typing import List, Dict, Optional
 
-from config import TOP_K
 from embeddings.embedder import embed
 from llm.model import get_llm
 from retrieval.web import tavily_search, filter_relevant_web_results
