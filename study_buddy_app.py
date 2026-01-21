@@ -20,7 +20,7 @@ def get_logo_tab_base64():
     with open("logo_tab.png", "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-# Enhanced CSS with active nav state
+# Enhanced CSS with improved sidebar design
 custom_css = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -74,15 +74,17 @@ body {
     background: var(--bg-main) !important;
 }
 
+/* Improved sidebar with gradient background like Hugging Face */
 .sidebar {
     width: 280px !important;
     min-width: 280px !important;
-    background: var(--bg-secondary) !important;
-    border-right: 1px solid var(--border) !important;
-    padding: 1.5rem !important;
+    background: linear-gradient(180deg, #1a1f35 0%, #0d1117 100%) !important;
+    border-right: none !important;
+    padding: 0 !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 0.5rem !important;
+    gap: 0 !important;
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.4) !important;
 }
 
 .main-content {
@@ -92,35 +94,47 @@ body {
     overflow-y: auto !important;
 }
 
-/* Logo section - minimal spacing */
+/* Logo section - seamless integration with no dividing line */
 .logo-container {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 0.25rem 0 0.25rem 0;
-    margin-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border);
+    padding: 2.5rem 1.5rem 2rem 1.5rem;
+    margin-bottom: 0;
+    border-bottom: none;
     background: transparent !important;
 }
 
 .logo-container img {
-    width: 300px;
+    width: 220px;
     height: auto;
-    filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.3));
+    filter: drop-shadow(0 4px 20px rgba(59, 130, 246, 0.5));
+    transition: filter 0.3s ease;
 }
 
-/* Navigation buttons with active state and smooth transitions */
+.logo-container img:hover {
+    filter: drop-shadow(0 6px 30px rgba(59, 130, 246, 0.7));
+}
+
+/* Navigation section with improved spacing */
+.nav-section {
+    padding: 0 1rem;
+    flex: 1;
+}
+
+/* Navigation buttons with smoother styling */
 .nav-section button {
     width: 100% !important;
     margin: 0 0 0.5rem 0 !important;
     padding: 0.875rem 1rem !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
     color: var(--text-secondary) !important;
     font-weight: 500 !important;
+    font-size: 0.95rem !important;
     text-align: left !important;
-    transition: all 0.15s ease-in-out !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     cursor: pointer !important;
     display: flex !important;
     align-items: center !important;
@@ -128,47 +142,56 @@ body {
 }
 
 .nav-section button:hover {
-    background: var(--bg-hover) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
     color: var(--text-primary) !important;
+    transform: translateX(2px) !important;
 }
 
-/* Active navigation state with smooth transition */
+/* Active navigation state with smooth glow effect */
 .nav-section button.nav-active {
-    background: var(--primary) !important;
-    color: white !important;
-    transition: all 0.15s ease-in-out !important;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%) !important;
+    border-color: rgba(59, 130, 246, 0.5) !important;
+    color: var(--primary-light) !important;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.2) !important;
+    transform: translateX(0) !important;
 }
 
+/* Settings section at bottom */
 .settings-section {
     margin-top: auto;
-    padding-top: 1rem;
+    padding: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .settings-section button {
     width: 100% !important;
     padding: 0.875rem 1rem !important;
-    background: var(--bg-tertiary) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
     color: var(--text-secondary) !important;
     font-weight: 500 !important;
-    transition: all 0.15s ease-in-out !important;
+    font-size: 0.95rem !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: flex-start !important;
 }
 
 .settings-section button:hover {
-    background: var(--bg-hover) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
     color: var(--text-primary) !important;
-    border-color: var(--border-light) !important;
+    transform: translateX(2px) !important;
 }
 
 .settings-section button.nav-active {
-    background: var(--primary) !important;
-    color: white !important;
-    border-color: var(--primary) !important;
-    transition: all 0.15s ease-in-out !important;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%) !important;
+    border-color: rgba(59, 130, 246, 0.5) !important;
+    color: var(--primary-light) !important;
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.2) !important;
+    transform: translateX(0) !important;
 }
 
 .page-content {
