@@ -605,11 +605,22 @@ def build_index_handler(files, settings):
                 # Extract text
                 text = extract_text_or_pdf(f)
                 total_chars += len(text)
-                
+
+                path = f.name
+
                 # Chunk text
                 chunk_size = int(settings.get("chunk_size", CHUNK_SIZE))
                 chunk_overlap = int(settings.get("chunk_overlap", CHUNK_OVERLAP))
                 chunks = chunk_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
+                if not chunks:
+                    print(f"[WARN] chunk_text returned empty for {path}, forcing one chunk")
+                    chunks = [text.strip()]
+
+                texts.extend(chunks)
+                total_chars += len(text)
+
+                # Debug info per file
+                print(f"✓ Processed {path}: {len(chunks)} chunks created")
                 texts += chunks
                 file_count += 1
                 
@@ -922,7 +933,7 @@ def create_app():
                     </div>
                     """)
                     
-                    pdf_file = gr.File(label="PDF Documents", file_types=[".pdf"], file_count="multiple")
+                    pdf_file = gr.File(label="PDF Documents", file_types=[".pdf", ".txt"], file_count="single")
                     build_index_btn = gr.Button("Build Index", variant="primary", size="lg")
                     status_text = gr.Textbox(label="Status", interactive=False)
                     status_display = gr.HTML("")
