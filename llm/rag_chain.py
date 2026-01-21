@@ -15,19 +15,19 @@ def retrieve_relevant_chunks(question, index, chunks, top_k=TOP_K, gap_threshold
     q_emb = embed([question])
 
     # Step 1: Retrieve more candidates if using MMR (need pool for diversity)
-    search_k = top_k * 3 if use_mmr else top_k
-    search_k = min(search_k, len(chunks))
+    #search_k = top_k * 3 if use_mmr else top_k
+    #search_k = min(search_k, len(chunks))
 
-    d, i = index.search(q_emb, search_k)
+    d, i = index.search(q_emb, top_k)
 
     top_score = d[0][0] if len(d[0]) > 0 else 0
 
     # Dynamic expansion for low scores
-    if top_score < 0.3:
-        search_k = min(search_k * 2, len(chunks))
-        print(f"Low top score detected. Expanding search from {top_k * 3 if use_mmr else top_k} to {search_k} chunks")
-        d, i = index.search(q_emb, search_k)
-        top_score = d[0][0]
+    # if top_score < 0.3:
+    #     search_k = min(top_k, len(chunks))
+    #     print(f"Low top score detected. Expanding search from {top_k * 3 if use_mmr else top_k} to {search_k} chunks")
+    #     d, i = index.search(q_emb, search_k)
+    #     top_score = d[0][0]
 
     print(f"Top score: {top_score:.3f}, Gap threshold: {gap_threshold}, MMR: {use_mmr}")
 
