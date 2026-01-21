@@ -3,22 +3,27 @@ from config import TOP_K
 from embeddings.embedder import embed
 from llm.model import get_llm
 
-#SIMILARITY_THRESHOLD = 0.22 #  (0.2 - permissive | 0.4 - strict)
 
 def retrieve_relevant_chunks(question, index, chunks, top_k=TOP_K, gap_threshold=0.1):
-
+    """
+        Dynamic retrieval: adjusts top_k based on initial retrieval quality.
+    """
     q_emb = embed([question])
     d, i = index.search(q_emb, top_k)   # vector database
-
-    # DEBUG
-    print(f"DEBUG - Raw distances: {d[0]}")
-    print(f"DEBUG - Max possible cosine sim should be ~1.0")
 
     # Filtering chunks by relevance
     relevant_chunks = []
     chunk_scores = []
 
     top_score = d[0][0] if len(d[0]) > 0 else 0
+
+    actual_top_k = top_k
+    if top_score < 0.3:  # Low quality matches
+        actual_top_k = min(top_k * 2, len(chunks))  # Double it, but cap at total chunks
+        print(f"Low top score detected. Expanding search from {top_k} to {actual_top_k} chunks")
+        d, i = index.search(q_emb, actual_top_k)  # Re-search with more chunks
+        top_score = d[0][0]  # Update top score
+
     print(f"Top score: {top_score:.3f}, Gap threshold: {gap_threshold}")
 
     for ci, similarity in zip(i[0], d[0]):
@@ -103,9 +108,6 @@ Question:
     )
 
     answer = result.choices[0].message.content
-
-    if avg_relevance < 0.3:
-        answer = f"[Low confidence - limited relevant information found]\n\n{answer}"
 
     print(f"Retrieved {len(relevant_chunks)} relevant chunks (avg similarity: {avg_relevance:.3f})")
     print(answer)
