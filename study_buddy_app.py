@@ -587,9 +587,9 @@ window.addEventListener('load', () => {
 
 
 # Helper functions
-def build_index_handler(files, settings):
+def build_index_handler(file, settings):
     """Build index from uploaded files (PDFs/TXTs)"""
-    if not files:
+    if not file:
         return "⚠️ Please upload at least one file first.", None, [], ""
     
     try:
@@ -600,36 +600,34 @@ def build_index_handler(files, settings):
         file_count = 0
         
         # robust loop from main.py
-        for f in files:
-            try:
-                # Extract text
-                text = extract_text_or_pdf(f)
-                total_chars += len(text)
+        # for f in files:
+        try:
+            # Extract text
+            text = extract_text_or_pdf(file)
+            total_chars += len(text)
 
-                path = f.name
+            # Chunk text
+            chunk_size = int(settings.get("chunk_size", CHUNK_SIZE))
+            chunk_overlap = int(settings.get("chunk_overlap", CHUNK_OVERLAP))
+            chunks = chunk_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
+            if not chunks:
+                print(f"[WARN] chunk_text returned empty for {file}, forcing one chunk")
+                chunks = [text.strip()]
 
-                # Chunk text
-                chunk_size = int(settings.get("chunk_size", CHUNK_SIZE))
-                chunk_overlap = int(settings.get("chunk_overlap", CHUNK_OVERLAP))
-                chunks = chunk_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
-                if not chunks:
-                    print(f"[WARN] chunk_text returned empty for {path}, forcing one chunk")
-                    chunks = [text.strip()]
+            texts.extend(chunks)
+            total_chars += len(text)
 
-                texts.extend(chunks)
-                total_chars += len(text)
+            # Debug info per file
+            print(f"✓ Processed {file}: {len(chunks)} chunks created")
+            texts += chunks
+            file_count += 1
 
-                # Debug info per file
-                print(f"✓ Processed {path}: {len(chunks)} chunks created")
-                texts += chunks
-                file_count += 1
-                
-            except ValueError as ve:
-                print(f"Error processing {f.name}: {ve}")
-                continue # skip bad file
-            except Exception as e:
-                print(f"Unexpected error processing {f.name}: {e}")
-                continue
+        except ValueError as ve:
+            print(f"Error processing {file}: {ve}")
+            #continue # skip bad file
+        except Exception as e:
+            print(f"Unexpected error processing {file}: {e}")
+            #continue
 
         if not texts:
              return "❌ No valid text extracted from uploaded files.", None, [], ""
@@ -929,11 +927,11 @@ def create_app():
                     gr.HTML("""
                     <div class="page-header">
                         <h1 class="page-title">Upload Your Study Material</h1>
-                        <p class="page-description">Upload PDF documents to build a searchable knowledge base</p>
+                        <p class="page-description">Upload PDF or TXT documents to build a searchable knowledge base</p>
                     </div>
                     """)
                     
-                    pdf_file = gr.File(label="PDF Documents", file_types=[".pdf", ".txt"], file_count="single")
+                    pdf_or_txt_file = gr.File(label="PDF/TXT Documents", file_types=[".pdf", ".txt"], file_count="single")
                     build_index_btn = gr.Button("Build Index", variant="primary", size="lg")
                     status_text = gr.Textbox(label="Status", interactive=False)
                     status_display = gr.HTML("")
@@ -1150,7 +1148,7 @@ def create_app():
         # Functionality
         build_index_btn.click(
             build_index_handler,
-            inputs=[pdf_file, settings_state],
+            inputs=[pdf_or_txt_file, settings_state],
             outputs=[status_text, index_state, chunks_state, status_display]
         )
         
