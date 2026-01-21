@@ -15,7 +15,7 @@ import json
 from typing import List, Dict, Optional
 
 from config import TOP_K
-from embeddings.embedder import embedder
+from embeddings.embedder import embed
 from llm.model import get_llm
 from retrieval.web import tavily_search, filter_relevant_web_results
 from llm.rag_chain import mmr, reformulate_query_for_web
@@ -37,15 +37,9 @@ def retrieve_context_rag_style(
         return ""
 
     # --- Embeddings ---
-    q_emb = embedder.encode(
-        [query],
-        normalize_embeddings=True
-    ).astype("float32")[0]
+    q_emb = embed([query])[0]
 
-    chunk_embs = embedder.encode(
-        chunks,
-        normalize_embeddings=True
-    ).astype("float32")
+    chunk_embs = embed(chunks)
 
     # --- MMR retrieval ---
     selected = mmr(q_emb, chunk_embs, k=min(top_k, len(chunks)))
@@ -64,7 +58,6 @@ def retrieve_context_rag_style(
             web_results = filter_relevant_web_results(
                 q_emb.flatten(),
                 web_results,
-                embedder,
                 top_n=3,
             )
 

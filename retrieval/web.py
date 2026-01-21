@@ -1,6 +1,9 @@
 from tavily import TavilyClient
 import numpy as np
 
+from embeddings.embedder import embed
+
+
 def extract_keywords(text, top_n=5):
     words = text.lower().split()
     word_count = {}
@@ -12,10 +15,10 @@ def extract_keywords(text, top_n=5):
     sorted_words = sorted(word_count.items(), key=lambda x: x[1], reverse=True)
     return [w for w, c in sorted_words[:top_n]]
 
-def filter_relevant_web_results(query_embedding, web_results, embedder, top_n=3):
+def filter_relevant_web_results(query_embedding, web_results, top_n=3):
     if not web_results:
         return []
-    web_embeddings = embedder.encode(web_results, normalize_embeddings=True).astype("float32")
+    web_embeddings = embed(web_results)
     similarities = np.dot(web_embeddings, query_embedding.T).flatten()
     top_indices = np.argsort(similarities)[-top_n:][::-1]
     return [web_results[i] for i in top_indices]

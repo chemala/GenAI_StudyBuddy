@@ -44,9 +44,10 @@ def build_index(chunks):
     
     # NEW CODE: Same logic but with validation
     try:
-        # Create FAISS index using L2 (Euclidean) distance
-        index = faiss.IndexFlatL2(EMB_DIM)
-        
+        # # Create FAISS index using L2 (Euclidean) distance
+        # index = faiss.IndexFlatL2(EMB_DIM)
+        index = faiss.IndexFlatIP(EMB_DIM)
+
         # Add vectors to index
         index.add(vectors)
         
