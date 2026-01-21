@@ -106,6 +106,7 @@ def ask(q, mode, api_key, inference_mode):
         state["chunks"],
         api_key,
         state["chat_history"],
+        allow_inference=allow_inference
     )
     #  allow_inference=allow_inference  # Pass the inference mode
 
