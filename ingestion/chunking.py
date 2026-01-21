@@ -118,7 +118,8 @@ CHUNK_OVERLAP = 150  # Overlap helps maintain continuity
 
 
 # Updated usage in your system:
-def chunk_text(text: str) -> List[str]:
+# Updated usage in your system:
+def chunk_text(text: str, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP) -> List[str]:
     """
     Main chunking function - uses smart chunking strategy
 
@@ -128,6 +129,6 @@ def chunk_text(text: str) -> List[str]:
     """
     return chunk_text_smart(
         text,
-        chunk_size=CHUNK_SIZE,  # INCREASED from typical 500
-        overlap=CHUNK_OVERLAP
+        chunk_size=chunk_size,
+        overlap=overlap
     )

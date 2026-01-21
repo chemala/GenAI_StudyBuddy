@@ -80,12 +80,20 @@ INFERENCE MODE INSTRUCTIONS:
   * Acknowledge if multiple interpretations are possible
 - If even reasonable inference isn't possible, acknowledge the limitation
 
+FORMATTING REQUIREMENTS:
+- Use clear section headers with markdown (##)
+- Break content into SHORT paragraphs (2-3 sentences max)
+- Use bullet points (-) for lists
+- Add blank lines between sections
+- Use **bold** for key terms and concepts
+- Keep answers well-structured and scannable
+
 DOCUMENT CONTEXT:
 {local_context}
 
 QUESTION: {question}
 
-ANSWER:"""
+Provide a well-formatted, easy-to-read answer:"""
     else:
         prompt = f"""You are a helpful study assistant. Answer the question based STRICTLY on the provided document context.
 
@@ -96,12 +104,20 @@ STRICT MODE INSTRUCTIONS:
 - If the context doesn't directly answer the question, clearly state what IS available and what is MISSING
 - Be precise and literal in your interpretation
 
+FORMATTING REQUIREMENTS:
+- Use clear section headers with markdown (##)
+- Break content into SHORT paragraphs (2-3 sentences max)
+- Use bullet points (-) for lists
+- Add blank lines between sections
+- Use **bold** for key terms and concepts
+- Keep answers well-structured and scannable
+
 DOCUMENT CONTEXT:
 {local_context}
 
 QUESTION: {question}
 
-ANSWER:"""
+Provide a well-formatted, easy-to-read answer:"""
 
     return prompt
 
@@ -135,11 +151,20 @@ INFERENCE MODE INSTRUCTIONS:
   * Acknowledge different perspectives
 - If sources conflict, analyze which is more authoritative or recent
 
+FORMATTING REQUIREMENTS:
+- Use clear section headers with markdown (##)
+- Break content into SHORT paragraphs (2-3 sentences max)
+- Use bullet points (-) for lists
+- Add blank lines between sections
+- Use **bold** for key terms and concepts
+- Cite sources clearly (e.g., [From document] or [From web])
+- Keep answers well-structured and scannable
+
 {context}
 
 QUESTION: {question}
 
-ANSWER:"""
+Provide a well-formatted, easy-to-read answer:"""
     else:
         prompt = f"""You are a helpful study assistant. Answer the question using both the document context and web sources.
 
@@ -151,11 +176,20 @@ STRICT MODE INSTRUCTIONS:
 - If sources conflict, present both views without choosing
 - Acknowledge if neither source fully answers the question
 
+FORMATTING REQUIREMENTS:
+- Use clear section headers with markdown (##)
+- Break content into SHORT paragraphs (2-3 sentences max)
+- Use bullet points (-) for lists
+- Add blank lines between sections
+- Use **bold** for key terms and concepts
+- Cite sources clearly (e.g., [From document] or [From web])
+- Keep answers well-structured and scannable
+
 {context}
 
 QUESTION: {question}
 
-ANSWER:"""
+Provide a well-formatted, easy-to-read answer:"""
 
     return prompt
 
